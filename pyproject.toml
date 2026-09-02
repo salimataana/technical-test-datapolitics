@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "technical-test-datapolitics"
+version = "0.1.0"
+description = "Local semantic search engine for public PDF documents"
+requires-python = ">=3.12"
+
+dependencies = [
+    "pymupdf",
+    "sentence-transformers",
+    "faiss-cpu",
+    "fastapi",
+    "uvicorn[standard]",
+    "pytesseract",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
+[project.scripts]
+pdf-search = "pdf_search.ingestion.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
