@@ -1,8 +1,7 @@
 from pathlib import Path
 
-from pdf_search.search.faiss_store import load_index, load_metadata
+from pdf_search.search.faiss_store import load_index, load_metadata, search_index
 from pdf_search.ingestion.embedder import create_embeddings
-from pdf_search.search.faiss_store import search_index
 
 
 index = load_index(Path("storage/index.faiss"))
@@ -24,10 +23,11 @@ scores, indices = search_index(
 print("Indices trouvés :", indices)
 print("Scores :", scores)
 
-for score, index in zip(scores, indices):
-    result = metadata[index]
+for score, index_position in zip(scores, indices):
+    result = metadata[index_position]
 
     print("\n--- Résultat ---")
+    print("Vector ID :", result["vector_id"])
     print("Score :", score)
     print("Document :", result["document_name"])
     print("Page :", result["page_number"])

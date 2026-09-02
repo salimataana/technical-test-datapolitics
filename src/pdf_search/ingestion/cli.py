@@ -4,10 +4,7 @@ from pathlib import Path
 from pdf_search.ingestion.chunker import chunk_text
 from pdf_search.ingestion.extractor import extract_text_from_pdf
 from pdf_search.ingestion.embedder import create_embeddings
-from pdf_search.search.faiss_store import create_index
-from pdf_search.search.faiss_store import save_index
-from pdf_search.search.faiss_store import save_metadata
-
+from pdf_search.search.faiss_store import create_index, save_index, save_metadata
 
 
 def main():
@@ -33,18 +30,49 @@ def main():
 
             all_chunks.extend(chunks)
 
-            print("   Page", page["page_number"], "→", len(chunks), "chunks")
+            print(
+                "   Page",
+                page["page_number"],
+                "→",
+                len(chunks),
+                "chunks",
+            )
 
+    # Création des embeddings dans le même ordre que les chunks
     texts = [chunk["text"] for chunk in all_chunks]
     embeddings = create_embeddings(texts)
+
+    # Création de l'index FAISS
     index = create_index(embeddings)
+
+    # Création des métadonnées avec l'identifiant du vecteur
+    metadata = []
+
+    for vector_id, chunk in enumerate(all_chunks):
+        metadata.append(
+            {
+                "vector_id": vector_id,
+                "document_name": chunk["document_name"],
+                "page_number": chunk["page_number"],
+                "chunk_index": chunk["chunk_index"],
+                "text": chunk["text"],
+            }
+        )
+
+    # Sauvegarde de l'index FAISS
     output_path = Path("storage/index.faiss")
     save_index(index, output_path)
+
+    # Sauvegarde des métadonnées
     metadata_path = Path("storage/metadata.json")
-    save_metadata(all_chunks, metadata_path)
+    save_metadata(metadata, metadata_path)
+
     print("Metadata sauvegardées :", metadata_path)
     print("Index FAISS sauvegardé :", output_path)
     print("Nombre de vecteurs dans FAISS :", index.ntotal)
     print("Nombre d'embeddings :", len(embeddings))
-
     print("Nombre total de chunks :", len(all_chunks))
+
+
+if __name__ == "__main__":
+    main()
