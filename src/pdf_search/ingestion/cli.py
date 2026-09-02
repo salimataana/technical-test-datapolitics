@@ -17,9 +17,31 @@ def main():
 
     all_chunks = []
 
+    # Statistiques d'extraction
+    total_pages = 0
+    ocr_pages = 0
+
     for pdf_file in pdf_files:
         pages = extract_text_from_pdf(pdf_file)
-        print(pdf_file.name, "→", len(pages), "pages")
+
+        total_pages += len(pages)
+
+        ocr_count = sum(
+            1
+            for page in pages
+            if page["extraction_method"] == "ocr"
+        )
+
+        ocr_pages += ocr_count
+
+        print(
+            pdf_file.name,
+            "→",
+            len(pages),
+            "pages",
+            "| OCR :",
+            ocr_count,
+        )
 
         for page in pages:
             chunks = chunk_text(
@@ -59,19 +81,25 @@ def main():
             }
         )
 
+    # Création du dossier de sortie s'il n'existe pas
+    output_dir = Path("storage")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     # Sauvegarde de l'index FAISS
-    output_path = Path("storage/index.faiss")
-    save_index(index, output_path)
+    index_path = output_dir / "index.faiss"
+    save_index(index, index_path)
 
     # Sauvegarde des métadonnées
-    metadata_path = Path("storage/metadata.json")
+    metadata_path = output_dir / "metadata.json"
     save_metadata(metadata, metadata_path)
 
     print("Metadata sauvegardées :", metadata_path)
-    print("Index FAISS sauvegardé :", output_path)
+    print("Index FAISS sauvegardé :", index_path)
     print("Nombre de vecteurs dans FAISS :", index.ntotal)
     print("Nombre d'embeddings :", len(embeddings))
     print("Nombre total de chunks :", len(all_chunks))
+    print("Nombre total de pages :", total_pages)
+    print("Nombre de pages avec OCR :", ocr_pages)
 
 
 if __name__ == "__main__":
