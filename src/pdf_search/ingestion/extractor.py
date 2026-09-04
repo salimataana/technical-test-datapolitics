@@ -33,7 +33,7 @@ def extract_text_from_pdf(pdf_path: Path) -> list[dict]:
 
                 text = pytesseract.image_to_string(
                     image,
-                    lang="fra+eng",
+                    lang="fra",
                 ).strip()
 
                 extraction_method = "ocr"
