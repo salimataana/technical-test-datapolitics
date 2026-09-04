@@ -48,6 +48,7 @@ def main():
                 page["text"],
                 page["document_name"],
                 page["page_number"],
+                extraction_method=page["extraction_method"],
             )
 
             all_chunks.extend(chunks)
@@ -55,6 +56,7 @@ def main():
             print(
                 "   Page",
                 page["page_number"],
+                "Méthode :", page["extraction_method"],
                 "→",
                 len(chunks),
                 "chunks",
@@ -77,6 +79,7 @@ def main():
                 "document_name": chunk["document_name"],
                 "page_number": chunk["page_number"],
                 "chunk_index": chunk["chunk_index"],
+                "extraction_method": chunk["extraction_method"],
                 "text": chunk["text"],
             }
         )

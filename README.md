@@ -354,11 +354,13 @@ Le client envoie donc un objet JSON au serveur.
 
 ```json
 {
+  "query": "Qui a signé la convention de mécénat ?",
   "results": [
     {
       "document_name": "document.pdf",
       "page_number": 5,
       "chunk_index": 0,
+      "extraction_method": "text",
       "score": 0.43,
       "text": "..."
     }
@@ -366,11 +368,23 @@ Le client envoie donc un objet JSON au serveur.
 }
 ```
 
+### Exemple avec curl
+
+```bash
+curl -X POST http://127.0.0.1:8000/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "Qui a signé la convention de mécénat ?",
+    "top_k": 5
+  }'
+```
+
 Chaque résultat contient :
 
 * `document_name` : nom du PDF ;
 * `page_number` : page du document ;
 * `chunk_index` : position du chunk ;
+* `extraction_method` : méthode utilisée, `text` ou `ocr` ;
 * `score` : score de similarité ;
 * `text` : contenu du chunk.
 
@@ -395,11 +409,15 @@ La suite actuelle couvre notamment :
 * création et recherche FAISS ;
 * validation des paramètres de l'API.
 
-Résultat obtenu pendant le développement :
+Le nombre exact de tests peut évoluer. Le résultat est vérifié automatiquement par GitHub Actions à chaque push et pull request.
 
-```text
-8 passed
+```bash
+python -m pytest -q
 ```
+
+### GitHub Actions
+
+Le workflow `.github/workflows/ci.yml` se lance à chaque push et pull request. Il installe Python 3.12 et Tesseract avec la langue française, exécute les tests et vérifie la construction de l'image Docker.
 
 ---
 
@@ -430,6 +448,8 @@ docker run --rm -p 8000:8000 \
   -v "$(pwd)/storage:/app/storage" \
   pdf-search
 ```
+
+Le modèle Sentence-Transformers est téléchargé lors du premier démarrage si son cache n'est pas déjà disponible. Avec `docker run --rm`, ce cache n'est pas conservé entre deux conteneurs.
 
 L'API est ensuite disponible sur :
 

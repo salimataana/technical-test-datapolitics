@@ -79,9 +79,10 @@ def search(request: SearchRequest):
                 "document_name": result["document_name"],
                 "page_number": result["page_number"],
                 "chunk_index": result["chunk_index"],
+                "extraction_method": result.get("extraction_method", "text"),
                 "score": float(score),
                 "text": result["text"],
             }
         )
 
-    return {"results": results}
+    return {"query": request.query, "results": results}
