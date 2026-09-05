@@ -11,6 +11,7 @@ requires-python = ">=3.12"
 dependencies = [
     "pymupdf",
     "sentence-transformers",
+    "torch",
     "faiss-cpu",
     "fastapi",
     "uvicorn[standard]",
@@ -20,6 +21,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "ruff",
 ]
 
 [project.scripts]
@@ -27,6 +29,21 @@ pdf-search = "pdf_search.ingestion.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.setuptools.packages.find]
 where = ["src"]

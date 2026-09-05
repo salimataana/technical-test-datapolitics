@@ -1,11 +1,31 @@
-import numpy as np
+import pytest
 from fastapi.testclient import TestClient
 
 import pdf_search.api.main as api_main
-from pdf_search.search.faiss_store import create_index
-
+import pdf_search.api.utils as api_utils
 
 client = TestClient(api_main.app)
+
+
+class FakeSearchService:
+    def __init__(self):
+        self.is_ready = True
+        self.indexed_vectors = 2
+
+    def load(self):
+        pass
+
+    def search(self, query, top_k):
+        return [
+            {
+                "document_name": "test.pdf",
+                "page_number": 1,
+                "chunk_index": 0,
+                "extraction_method": "text",
+                "score": 1.0,
+                "text": "Le conseil municipal se réunit.",
+            }
+        ]
 
 
 def test_search_rejects_invalid_top_k():
@@ -32,53 +52,38 @@ def test_search_rejects_top_k_above_limit():
     assert response.status_code == 422
 
 
-def test_search_returns_matching_result(monkeypatch, tmp_path):
-    storage_dir = tmp_path / "storage"
-    storage_dir.mkdir()
-    (storage_dir / "index.faiss").touch()
-    (storage_dir / "metadata.json").touch()
-
-    fake_index = create_index(
-        np.array(
-            [
-                [1.0, 0.0],
-                [0.0, 1.0],
-            ],
-            dtype="float32",
-        )
+def test_search_rejects_blank_query():
+    response = client.post(
+        "/search",
+        json={
+            "query": "   ",
+            "top_k": 1,
+        },
     )
-    fake_metadata = [
-        {
-            "document_name": "test.pdf",
-            "page_number": 1,
-            "chunk_index": 0,
-            "extraction_method": "text",
-            "text": "Le conseil municipal se réunit.",
-        },
-        {
-            "document_name": "other.pdf",
-            "page_number": 2,
-            "chunk_index": 0,
-            "extraction_method": "ocr",
-            "text": "Un autre document.",
-        },
-    ]
 
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(api_main, "load_index", lambda path: fake_index)
-    monkeypatch.setattr(api_main, "load_metadata", lambda path: fake_metadata)
+    assert response.status_code == 422
+
+
+def test_search_returns_matching_result(monkeypatch):
+    fake_service = FakeSearchService()
     monkeypatch.setattr(
-        api_main,
-        "create_embeddings",
-        lambda texts: np.array([[1.0, 0.0]], dtype="float32"),
+        api_utils,
+        "create_search_service",
+        lambda storage_dir: fake_service,
     )
 
     with TestClient(api_main.app) as test_client:
+        health_response = test_client.get("/health")
         response = test_client.post(
             "/search",
             json={"query": "conseil municipal", "top_k": 1},
         )
 
+    assert health_response.status_code == 200
+    assert health_response.json() == {
+        "status": "ok",
+        "indexed_vectors": 2,
+    }
     assert response.status_code == 200
     payload = response.json()
     assert payload["query"] == "conseil municipal"
@@ -92,3 +97,19 @@ def test_search_returns_matching_result(monkeypatch, tmp_path):
             "text": "Le conseil municipal se réunit.",
         }
     ]
+
+
+def test_startup_rejects_invalid_artifacts(monkeypatch):
+    class BrokenSearchService:
+        def load(self):
+            raise RuntimeError("Search artifacts are invalid: checksum mismatch")
+
+    monkeypatch.setattr(
+        api_utils,
+        "create_search_service",
+        lambda storage_dir: BrokenSearchService(),
+    )
+
+    with pytest.raises(RuntimeError, match="Search artifacts are invalid"):
+        with TestClient(api_main.app):
+            pass

@@ -1,6 +1,6 @@
 import numpy as np
 
-from pdf_search.ingestion.embedder import create_embeddings
+from pdf_search.ingestion.embedder import EmbeddingModel
 
 
 def test_embeddings_are_normalized():
@@ -9,7 +9,7 @@ def test_embeddings_are_normalized():
         "Le conseil municipal vote une délibération.",
     ]
 
-    embeddings = create_embeddings(texts)
+    embeddings = EmbeddingModel().encode(texts)
 
     norms = np.linalg.norm(embeddings, axis=1)
 

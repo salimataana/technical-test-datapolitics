@@ -24,7 +24,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
 
       - name: Install Tesseract OCR
         run: |
@@ -34,24 +33,22 @@ jobs:
             tesseract-ocr-fra
 
 
-      - name: Cache Hugging Face models
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/huggingface
-          key: ${{ runner.os }}-huggingface-${{ hashFiles('pyproject.toml', 'src/pdf_search/ingestion/embedder.py') }}
-          restore-keys: |
-            ${{ runner.os }}-huggingface-
-
       - name: Install project dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install "uv==0.11.3"
+          uv sync --locked --extra dev
 
       - name: Verify OCR languages
         run: tesseract --list-langs
 
+      - name: Run Ruff lint
+        run: ./.venv/bin/ruff check .
+
+      - name: Check Ruff formatting
+        run: ./.venv/bin/ruff format --check .
+
       - name: Run tests
-        run: python -m pytest -q
+        run: ./.venv/bin/python -m pytest -q
 
   docker:
     name: Build Docker image
@@ -71,6 +68,10 @@ jobs:
           context: .
           file: ./Dockerfile
           push: false
+          load: true
           tags: pdf-search:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Run Docker end-to-end test
+        run: bash tests/e2e/docker_e2e.sh pdf-search:ci
