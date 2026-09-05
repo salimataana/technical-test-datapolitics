@@ -1,360 +1,200 @@
-# Technical Test – Datapolitics
+# Technical Test - Datapolitics
 
-## 1. Description
+[![CI](https://github.com/salimataana/technical-test-datapolitics/actions/workflows/ci.yml/badge.svg)](https://github.com/salimataana/technical-test-datapolitics/actions/workflows/ci.yml)
 
-Ce projet implémente un moteur de recherche sémantique local permettant de rechercher des informations dans un ensemble de documents PDF.
+This project implements a local semantic search engine for French public PDF documents.
 
-L'application est composée de deux parties principales :
+It provides two main components:
 
-* une **pipeline d'ingestion** permettant de lire les PDF, d'extraire leur contenu, de les découper en morceaux (*chunks*) et de générer leurs embeddings ;
-* une **API FastAPI** permettant d'effectuer une recherche sémantique dans les documents.
+- an ingestion pipeline that extracts PDF text, applies OCR when necessary, splits text into chunks, generates embeddings and builds a FAISS index;
+- a FastAPI service that searches the indexed chunks and returns their source metadata.
 
-Le système fonctionne entièrement en local et n'utilise aucune API payante.
+The system runs locally and does not require a paid external API.
 
-### Technologies principales
+## Features
 
-* Python 3.12
-* PyMuPDF pour l'extraction de texte des PDF
-* Tesseract OCR pour les PDF scannés
-* Sentence-Transformers pour les embeddings
-* FAISS pour la recherche vectorielle
-* FastAPI pour l'API HTTP
-* Docker pour reproduire l'environnement d'exécution
-* Pytest pour les tests
+- Text extraction with PyMuPDF.
+- Automatic OCR fallback for scanned pages with Tesseract and the French language pack.
+- Local CPU embeddings with `paraphrase-multilingual-MiniLM-L12-v2`.
+- Persistent FAISS vector index and JSON metadata.
+- Page-aware search results with document and chunk information.
+- Docker image containing Python and Tesseract.
+- GitHub Actions checks for tests, OCR dependencies and Docker builds.
 
----
-
-## 2. Architecture
-
-Le fonctionnement général est le suivant :
+## Architecture
 
 ```text
-                    INGESTION
-                       │
-                       ▼
-                 Dossier de PDF
-                       │
-                       ▼
-                 Extraction texte
-                 ┌─────┴─────┐
-                 │           │
-             PDF texte    PDF scanné
-                 │           │
-             PyMuPDF     Tesseract OCR
-                 │           │
-                 └─────┬─────┘
-                       ▼
-                    Chunks
-                       │
-                       ▼
-              Sentence-Transformers
-                       │
-                       ▼
-                  Embeddings
-                       │
-                       ▼
-                     FAISS
-                       │
-              ┌────────┴────────┐
-              ▼                 ▼
-        index.faiss       metadata.json
+PDF folder
+    |
+    v
+Ingestion CLI
+    |
+    +-- PyMuPDF text extraction
+    +-- Tesseract OCR for pages with insufficient text
+    +-- Character-based chunking
+    +-- Sentence-Transformers embeddings
+    +-- FAISS index
+            |
+            +-- storage/index.faiss
+            +-- storage/metadata.json
 
-
-                     RECHERCHE
-                         │
-                         ▼
-                  Question utilisateur
-                         │
-                         ▼
-                    Embedding
-                         │
-                         ▼
-                   Recherche FAISS
-                         │
-                         ▼
-                   Meilleurs chunks
-                         │
-                         ▼
-                   Métadonnées
-                         │
-                         ▼
-                      JSON
+Search query
+    |
+    v
+FastAPI /search
+    |
+    +-- Query embedding
+    +-- FAISS similarity search
+    +-- Metadata lookup
+    +-- JSON response
 ```
 
-L'index FAISS contient les vecteurs.
+FAISS stores the vectors. `metadata.json` stores the text and the source information associated with each vector.
 
-Le fichier `metadata.json` permet de retrouver les informations associées à chaque vecteur : document, page, chunk et texte.
-
----
-
-## 3. Structure du projet
+## Project structure
 
 ```text
-technical-test-datapolitics/
-│
-├── data/
-│   └── *.pdf
-│
-├── storage/
-│   ├── index.faiss
-│   └── metadata.json
-│
-├── src/
-│   └── pdf_search/
-│       ├── api/
-│       │   └── main.py
-│       │
-│       ├── ingestion/
-│       │   ├── cli.py
-│       │   ├── extractor.py
-│       │   ├── chunker.py
-│       │   └── embedder.py
-│       │
-│       └── search/
-│           └── faiss_store.py
-│
+.
+├── data/                         # Input PDF documents
+├── src/pdf_search/
+│   ├── api/main.py               # FastAPI application
+│   ├── ingestion/
+│   │   ├── cli.py                # Ingestion entry point
+│   │   ├── extractor.py          # Text extraction and OCR
+│   │   ├── chunker.py            # Chunk creation
+│   │   └── embedder.py           # Local embeddings
+│   └── search/faiss_store.py     # FAISS and metadata persistence
 ├── tests/
-│   ├── test_api.py
-│   ├── test_chunker.py
-│   ├── test_embedder.py
-│   ├── test_extractor.py
-│   └── test_faiss_store.py
-│
-├── .gitignore
+├── storage/                      # Generated index and metadata
+├── .github/workflows/ci.yml      # GitHub Actions workflow
 ├── Dockerfile
 ├── pyproject.toml
 └── README.md
 ```
 
----
+`storage/` is generated by ingestion and is ignored by Git. The sample PDFs in `data/` are the input corpus used for the test.
 
-## 4. Installation locale
+## Local installation
 
-### Prérequis
+### Requirements
 
-* Python 3.12+
-* Tesseract OCR
-* Git
+- Python 3.12 or later.
+- Tesseract OCR with the French language data.
+- Git.
 
-Créer et activer un environnement virtuel :
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-Installer le projet et ses dépendances :
-
-```bash
-pip install -e ".[dev]"
-```
-
-Pour l'OCR, Tesseract doit également être installé sur le système.
-
-Sur Ubuntu :
+On Ubuntu:
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y tesseract-ocr tesseract-ocr-fra
 ```
 
-La langue française est nécessaire pour permettre à Tesseract de traiter correctement les documents en français.
+Create and activate a virtual environment:
 
----
-
-## 5. Ajouter les documents PDF
-
-Placer les documents PDF dans le dossier :
-
-```text
-data/
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[dev]"
 ```
 
-Par exemple :
+The embedding model is downloaded from Hugging Face the first time embeddings are created. No paid API is used.
 
-```text
-data/
-├── document1.pdf
-├── document2.pdf
-└── document3.pdf
-```
+## Ingestion
 
-Le script d'ingestion parcourt automatiquement les fichiers ayant l'extension `.pdf`.
-
----
-
-## 6. Lancer l'ingestion
-
-L'ingestion se lance avec le chemin du dossier contenant les PDF :
+Place PDF files in a local folder, then run:
 
 ```bash
 python -m pdf_search.ingestion.cli data
 ```
 
-Le script effectue les opérations suivantes :
+The command:
 
-1. recherche les fichiers PDF ;
-2. extrait le texte page par page ;
-3. utilise PyMuPDF pour les PDF contenant du texte ;
-4. utilise Tesseract OCR lorsque le texte extrait est insuffisant ;
-5. découpe le texte en chunks ;
-6. génère un embedding pour chaque chunk ;
-7. construit l'index FAISS ;
-8. sauvegarde l'index et les métadonnées.
+1. finds the PDF files in the input folder;
+2. extracts text page by page;
+3. falls back to French OCR when a page contains fewer than 20 extracted characters;
+4. creates chunks of up to 1,000 characters with 150 characters of overlap;
+5. generates normalized 384-dimensional embeddings;
+6. creates an exact FAISS inner-product index;
+7. writes the index and metadata to `storage/`.
 
-Les fichiers générés sont :
+Generated files:
 
 ```text
 storage/index.faiss
 storage/metadata.json
 ```
 
-### Exemple de statistiques
+The current CLI writes to a `storage/` directory relative to the current working directory. It processes top-level files matching `*.pdf`.
 
-Avec le corpus utilisé pendant le développement :
+The ingestion output reports the number of documents, pages, chunks and OCR pages. If no text can be extracted from any page, ingestion fails rather than creating an unusable empty index.
 
-```text
-Nombre total de chunks : 207
-Nombre total de pages : 64
-Nombre de pages avec OCR : 2
-Nombre de vecteurs dans FAISS : 207
+## OCR behavior
+
+For each page, the application first tries native PDF text extraction. If the extracted text is too short, the page is rendered at 200 DPI and sent to Tesseract with `lang="fra"`.
+
+Each chunk records the extraction method:
+
+```json
+{
+  "document_name": "scanned-document.pdf",
+  "page_number": 1,
+  "chunk_index": 0,
+  "extraction_method": "ocr",
+  "text": "Extracted French text..."
+}
 ```
 
-Ces valeurs dépendent évidemment des documents présents dans `data/`.
+OCR is slower than native extraction and may be inaccurate for tables, low-quality scans, unusual fonts or complex layouts.
 
----
+## Embeddings and vector search
 
-## 7. Pourquoi utiliser des chunks ?
-
-Un document PDF complet peut être trop long pour être représenté efficacement par un seul embedding.
-
-Le texte est donc découpé en morceaux.
-
-La configuration utilisée par défaut est :
-
-* taille maximale : 1000 caractères ;
-* chevauchement : 150 caractères.
-
-Le chevauchement permet de conserver une partie du contexte entre deux chunks consécutifs.
-
-Chaque chunk conserve également :
-
-* le nom du document ;
-* le numéro de page ;
-* son index dans la page ;
-* son texte.
-
----
-
-## 8. Embeddings
-
-Le modèle utilisé est :
+The project uses:
 
 ```text
 paraphrase-multilingual-MiniLM-L12-v2
 ```
 
-Il est particulièrement adapté à ce projet car il prend en charge plusieurs langues, dont le français.
+The model is loaded lazily on CPU, uses batches of 32 texts and normalizes the output vectors. Normalization makes the inner product used by `faiss.IndexFlatIP` equivalent to cosine similarity.
 
-Le modèle est exécuté localement et ne nécessite pas d'API payante.
+`IndexFlatIP` performs an exact search. This is appropriate for the small corpus in this exercise and avoids index-training complexity.
 
-Chaque chunk est transformé en un vecteur de dimension 384.
+## API
 
-La requête utilisateur est transformée avec le même modèle afin de pouvoir être comparée aux vecteurs des documents.
-
-Les embeddings sont normalisés :
-
-```python
-normalize_embeddings=True
-```
-
-Cette normalisation permet d'utiliser la similarité cosinus avec FAISS via un produit scalaire (*inner product*).
-
----
-
-## 9. Recherche vectorielle avec FAISS
-
-FAISS est utilisé avec :
-
-```python
-'faiss.IndexFlatIP'
-```
-
-`IP` signifie *Inner Product*.
-
-Les embeddings étant normalisés, le produit scalaire entre deux vecteurs correspond à leur similarité cosinus.
-
-Le principe est donc :
-
-```text
-Question
-   ↓
-Embedding
-   ↓
-Comparaison avec les embeddings des chunks
-   ↓
-Scores de similarité
-   ↓
-Top K résultats
-```
-
-Pour chaque résultat, l'application récupère ensuite les métadonnées correspondant à l'identifiant du vecteur FAISS.
-
----
-
-## 10. Lancer l'API
-
-Une fois l'index créé :
+After ingestion, start the API from the project root:
 
 ```bash
 uvicorn pdf_search.api.main:app --reload
 ```
 
-L'API est alors disponible sur :
+The API is available at `http://127.0.0.1:8000` and its Swagger documentation at `http://127.0.0.1:8000/docs`.
 
-```text
-http://127.0.0.1:8000
-```
+### `POST /search`
 
-La documentation interactive Swagger est disponible sur :
-
-```text
-http://127.0.0.1:8000/docs
-```
-
----
-
-## 11. Endpoint `/search`
-
-### Méthode
-
-```text
-POST /search
-```
-
-### Pourquoi POST ?
-
-La recherche reçoit des données envoyées par le client, notamment :
-
-* la question ;
-* le nombre de résultats souhaités.
-
-Le client envoie donc un objet JSON au serveur.
-
-### Exemple de requête
+Request:
 
 ```json
 {
-  "query": "Qui a signé la convention de mécénat ?",
+  "query": "Who signed the sponsorship agreement?",
   "top_k": 5
 }
 ```
 
-### Exemple de réponse
+Example with curl:
+
+```bash
+curl -X POST http://127.0.0.1:8000/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "Who signed the sponsorship agreement?",
+    "top_k": 5
+  }'
+```
+
+Response:
 
 ```json
 {
-  "query": "Qui a signé la convention de mécénat ?",
+  "query": "Who signed the sponsorship agreement?",
   "results": [
     {
       "document_name": "document.pdf",
@@ -368,80 +208,27 @@ Le client envoie donc un objet JSON au serveur.
 }
 ```
 
-### Exemple avec curl
+`top_k` must be between 1 and 20. If the requested value is larger than the number of indexed chunks, it is capped at the available number of vectors.
 
-```bash
-curl -X POST http://127.0.0.1:8000/search \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "Qui a signé la convention de mécénat ?",
-    "top_k": 5
-  }'
-```
+## Docker
 
-Chaque résultat contient :
-
-* `document_name` : nom du PDF ;
-* `page_number` : page du document ;
-* `chunk_index` : position du chunk ;
-* `extraction_method` : méthode utilisée, `text` ou `ocr` ;
-* `score` : score de similarité ;
-* `text` : contenu du chunk.
-
-`top_k` est limité entre 1 et 20 afin d'éviter des requêtes excessives.
-
----
-
-## 12. Tests
-
-Les tests sont exécutés avec :
-
-```bash
-pytest
-```
-
-La suite actuelle couvre notamment :
-
-* extraction de texte PDF ;
-* extraction OCR ;
-* découpage en chunks ;
-* normalisation et dimension des embeddings ;
-* création et recherche FAISS ;
-* validation des paramètres de l'API.
-
-Le nombre exact de tests peut évoluer. Le résultat est vérifié automatiquement par GitHub Actions à chaque push et pull request.
-
-```bash
-python -m pytest -q
-```
-
-### GitHub Actions
-
-Le workflow `.github/workflows/ci.yml` se lance à chaque push et pull request. Il installe Python 3.12 et Tesseract avec la langue française, exécute les tests et vérifie la construction de l'image Docker.
-
----
-
-## 13. Utilisation avec Docker
-
-Docker permet de reproduire l'environnement nécessaire à l'application sans avoir à installer manuellement toutes les dépendances.
-
-L'image contient notamment :
-
-* Python 3.12 ;
-* les dépendances Python du projet ;
-* Tesseract OCR ;
-* la langue française de Tesseract ;
-* le code de l'application.
-
-### Construire l'image
-
-Depuis la racine du projet :
+Build the image from the project root:
 
 ```bash
 docker build -t pdf-search .
 ```
 
-### Lancer l'application
+Run ingestion inside Docker:
+
+```bash
+docker run --rm \
+  -v "$(pwd)/data:/app/data:ro" \
+  -v "$(pwd)/storage:/app/storage" \
+  pdf-search \
+  python -m pdf_search.ingestion.cli data
+```
+
+Start the API using the generated index:
 
 ```bash
 docker run --rm -p 8000:8000 \
@@ -449,258 +236,73 @@ docker run --rm -p 8000:8000 \
   pdf-search
 ```
 
-Le modèle Sentence-Transformers est téléchargé lors du premier démarrage si son cache n'est pas déjà disponible. Avec `docker run --rm`, ce cache n'est pas conservé entre deux conteneurs.
+The `storage/` volume keeps `index.faiss` and `metadata.json` available after the container is removed. The embedding model is downloaded when it is first needed. With `docker run --rm`, the model cache is not retained unless an additional cache volume is mounted.
 
-L'API est ensuite disponible sur :
+## Rebuilding the index
 
-```text
-http://127.0.0.1:8000
-```
-
-Swagger :
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-### Pourquoi monter `storage/` ?
-
-Le volume :
+The index is rebuilt from all PDFs present in the input folder. After adding, removing or modifying PDFs:
 
 ```bash
--v "$(pwd)/storage:/app/storage"
+python -m pdf_search.ingestion.cli data
 ```
 
-permet au conteneur d'utiliser les fichiers persistants du projet :
+Restart the API after rebuilding so that it reloads the new index and metadata.
 
-```text
-storage/index.faiss
-storage/metadata.json
-```
+## Tests and CI
 
-Ainsi, les données générées ne sont pas perdues lorsque le conteneur est supprimé.
-
----
-
-## 14. Ingestion avec Docker
-
-Pour reconstruire l'index avec les PDF présents dans `data/`, l'ingestion peut également être exécutée dans le conteneur.
-
-Par exemple :
+Run the tests locally with:
 
 ```bash
-docker run --rm \
-  -v "$(pwd)/data:/app/data" \
-  -v "$(pwd)/storage:/app/storage" \
-  pdf-search \
-  python -m pdf_search.ingestion.cli data
+python -m pytest -q
 ```
 
-Cette commande monte :
+The tests cover PDF extraction, OCR detection, chunking, embedding normalization, FAISS search, and request validation. The embedding test uses the real model and may download model weights.
 
-* `data/` dans le conteneur pour fournir les PDF ;
-* `storage/` pour conserver l'index et les métadonnées.
+The workflow in `.github/workflows/ci.yml` runs on pushes and pull requests. It:
 
-Après modification ou ajout de PDF, il faut relancer l'ingestion afin de reconstruire l'index.
+- installs Python 3.12;
+- installs Tesseract and its French language data;
+- caches Hugging Face model files;
+- installs the project and development dependencies;
+- runs the test suite;
+- builds the Docker image.
 
----
+## Limitations and assumptions
 
-## 15. Que faire lorsque les PDF changent ?
+### Search quality
 
-L'index FAISS est construit à partir des documents présents au moment de l'ingestion.
+The current search is semantic only. It may rank conceptually similar text above an exact match, especially for names, dates, amounts, legal references and other precise terms.
 
-Si des PDF sont ajoutés, supprimés ou modifiés :
+### Chunking
 
-1. placer les nouveaux PDF dans `data/` ;
-2. relancer l'ingestion ;
-3. le fichier `storage/index.faiss` est recréé ;
-4. le fichier `storage/metadata.json` est recréé ;
-5. redémarrer l'API si nécessaire.
-
-L'approche retenue est volontairement simple et adaptée à un petit corpus.
-
----
-
-## 16. Gestion des PDF scannés
-
-Certains PDF ne contiennent pas de texte exploitable directement.
-
-Pour ces documents, PyMuPDF peut retourner très peu de texte.
-
-Dans ce cas, l'application utilise automatiquement Tesseract OCR.
-
-Le fonctionnement est :
-
-```text
-PDF
- ↓
-Extraction PyMuPDF
- ↓
-Texte insuffisant ?
- ├── Non → texte conservé
- └── Oui → page convertie en image
-             ↓
-          Tesseract OCR
-             ↓
-           texte
-```
-
-La méthode utilisée est également conservée dans les données d'ingestion sous la forme :
-
-```text
-text
-```
-
-ou :
-
-```text
-ocr
-```
-
-Cela permet notamment de suivre combien de pages ont nécessité de l'OCR.
-
----
-
-## 17. Limites connues
-
-### Recherche sémantique
-
-La recherche utilise une similarité vectorielle et ne garantit pas que le chunk contenant la réponse exacte soit toujours classé premier.
-
-Par exemple, une question sur les signataires d'une convention peut faire remonter en premier des passages parlant de la convention et de sa signature, même si les noms des signataires apparaissent dans un chunk légèrement moins bien classé.
-
-Cela constitue une limite normale d'une recherche sémantique basée uniquement sur les embeddings.
-
-### Découpage
-
-Le découpage actuel est basé sur le nombre de caractères.
-
-Il peut donc couper :
-
-* une phrase ;
-* un mot ;
-* un paragraphe.
-
-Une amélioration possible serait d'utiliser un découpage basé sur les paragraphes ou les phrases, tout en conservant une limite de taille.
+Chunks are currently based on character offsets. A chunk may split a word, sentence or paragraph. A paragraph- or sentence-aware splitter would improve retrieval quality.
 
 ### OCR
 
-L'OCR est plus lent que l'extraction directe de texte et peut produire des erreurs sur :
+OCR may produce errors in tables, poor scans and complex layouts. Handwritten content is not a target use case. OCR failures are surfaced during ingestion, but no manual correction workflow is provided.
 
-* les tableaux ;
-* les documents de mauvaise qualité ;
-* certaines polices ;
-* les mises en page complexes.
+### Persistence and scale
 
-### Mise à jour de l'index
+FAISS and metadata are stored as local files. There is no manifest, incremental indexing, atomic multi-file commit, database, authentication or access control. `IndexFlatIP` is exact but requires a comparison with every vector, so it is intended for a small corpus.
 
-L'index est actuellement reconstruit lorsqu'une nouvelle ingestion est effectuée.
+### Runtime assumptions
 
-Il n'y a pas encore de système d'indexation incrémentale permettant de ne recalculer que les documents modifiés.
+The commands assume they are run from the project root. The application does not currently expose configuration for the storage directory, model name, chunk size or OCR threshold.
 
-### Taille du corpus
+## Production improvements
 
-`IndexFlatIP` effectue une comparaison avec les vecteurs du corpus.
+For a production system, I would consider:
 
-Cette solution est simple et adaptée à un petit corpus, mais elle serait moins adaptée à plusieurs millions de documents.
+- sentence- or paragraph-aware chunking;
+- hybrid lexical and semantic search for exact names, dates and references;
+- a multilingual reranker;
+- incremental indexing based on document hashes;
+- atomic versioned index releases and a manifest;
+- persistent object storage and a metadata database;
+- OCR preprocessing and quality scoring;
+- structured logs, metrics and tracing;
+- authentication and access control;
+- an approximate FAISS index for larger corpora;
+- asynchronous ingestion workers and a reverse proxy.
 
----
-
-## 18. Choix techniques
-
-### Pourquoi FAISS ?
-
-FAISS est une bibliothèque spécialisée dans la recherche de vecteurs.
-
-Elle est simple à utiliser et adaptée à un petit corpus local.
-
-Elle permet également de sauvegarder l'index sur disque.
-
-### Pourquoi un modèle local ?
-
-Le test demande une solution sans API payante.
-
-Le modèle Sentence-Transformers est donc exécuté localement.
-
-Cela évite d'envoyer le contenu des documents à un service externe.
-
-### Pourquoi FastAPI ?
-
-FastAPI permet de créer rapidement une API HTTP typée avec validation automatique des données grâce à Pydantic.
-
-Il fournit également automatiquement une documentation Swagger.
-
-### Pourquoi Docker ?
-
-Docker permet de reproduire l'environnement nécessaire au fonctionnement de l'application, notamment :
-
-* Python ;
-* les dépendances Python ;
-* Tesseract ;
-* la langue française de Tesseract.
-
----
-
-## 19. Améliorations possibles
-
-Pour une version de production, plusieurs améliorations pourraient être envisagées :
-
-* découpage des textes basé sur les phrases et paragraphes ;
-* recherche hybride combinant recherche lexicale et recherche sémantique ;
-* reranking des résultats ;
-* index FAISS approximatif pour les très gros volumes ;
-* indexation incrémentale ;
-* configuration des paramètres via variables d'environnement ;
-* traitement par batch configurable pour les embeddings ;
-* monitoring et logs structurés ;
-* authentification et contrôle d'accès ;
-* stockage des documents et métadonnées dans une base de données ;
-* déploiement de l'API derrière un reverse proxy ;
-* workers multiples pour la production.
-
----
-
-## 20. Architecture de production envisagée
-
-Pour un environnement de production avec un volume important, l'architecture pourrait évoluer vers :
-
-```text
-                    Utilisateur
-                         │
-                         ▼
-                  API / Reverse Proxy
-                         │
-                         ▼
-                    FastAPI
-                         │
-              ┌──────────┴──────────┐
-              ▼                     ▼
-       Service de recherche   Service d'ingestion
-              │                     │
-              ▼                     ▼
-         Index vectoriel       Stockage documents
-              │
-              ▼
-       Base de métadonnées
-```
-
-La version actuelle reste volontairement simple afin de répondre au besoin du test technique avec un petit corpus local.
-
----
-
-## 21. Résumé
-
-Le projet fournit un moteur de recherche sémantique local capable de :
-
-* lire des documents PDF ;
-* gérer les PDF textuels et scannés ;
-* effectuer de l'OCR en français ;
-* découper les documents en chunks ;
-* générer des embeddings localement ;
-* indexer ces embeddings avec FAISS ;
-* conserver les métadonnées des chunks ;
-* exposer une API FastAPI ;
-* effectuer des recherches sémantiques via `POST /search` ;
-* fonctionner dans un conteneur Docker.
-
-Le système privilégie une architecture simple, locale et reproductible, adaptée au périmètre du test technique.
+The current design intentionally remains local and simple because the technical test provides a small corpus and focuses on engineering decisions, code organization and trade-offs.
