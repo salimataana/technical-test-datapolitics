@@ -6,6 +6,12 @@ from pdf_search.search.service import SearchService
 
 
 class FakeEmbedder:
+    def __init__(self):
+        self.loaded = False
+
+    def load(self):
+        self.loaded = True
+
     def encode(self, texts):
         assert texts == ["conseil municipal"]
         return np.array([[1.0, 0.0]], dtype="float32")
@@ -50,11 +56,13 @@ class FakeVectorStore:
 
 
 def test_search_service_loads_and_searches():
-    service = SearchService(FakeEmbedder(), FakeVectorStore())
+    embedder = FakeEmbedder()
+    service = SearchService(embedder, FakeVectorStore())
 
     service.load()
     results = service.search("conseil municipal", top_k=1)
 
+    assert embedder.loaded
     assert service.is_ready
     assert service.indexed_vectors == 2
     assert results[0]["document_name"] == "test.pdf"

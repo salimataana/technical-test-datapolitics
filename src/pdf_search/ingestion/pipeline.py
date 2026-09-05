@@ -12,6 +12,8 @@ from pdf_search.search.faiss_store import FaissVectorStore, create_index
 
 @dataclass(frozen=True, slots=True)
 class IngestionStats:
+    """Summary of the documents, pages, chunks and vectors created."""
+
     document_count: int
     total_pages: int
     total_chunks: int

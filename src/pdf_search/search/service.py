@@ -20,6 +20,7 @@ class SearchService:
 
     def load(self) -> None:
         self.index, self.metadata, self.manifest = self.vector_store.load()
+        self.embedder.load()
 
     @property
     def is_ready(self) -> bool:

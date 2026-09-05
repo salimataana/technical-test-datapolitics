@@ -4,6 +4,8 @@ from typing import Any
 
 @dataclass(frozen=True, slots=True)
 class PageContent:
+    """Text extracted from one PDF page with its provenance information."""
+
     document_name: str
     page_number: int
     text: str
@@ -15,6 +17,8 @@ class PageContent:
 
 @dataclass(frozen=True, slots=True)
 class TextChunk:
+    """Searchable text segment with document and page metadata."""
+
     document_name: str
     page_number: int
     chunk_index: int

@@ -12,7 +12,49 @@ It provides:
 
 No paid external API is required.
 
-## Quick start
+## Docker execution
+
+Build the image:
+
+```bash
+docker build -t pdf-search .
+```
+
+Run ingestion manually:
+
+```bash
+docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd)/data:/app/data:ro" -v "$(pwd)/storage:/app/storage" pdf-search python -m pdf_search.ingestion.cli data --storage-dir /app/storage
+```
+
+Start the API with the generated artifacts:
+
+```bash
+docker run --rm --user "$(id -u):$(id -g)" -p 8000:8000 -v "$(pwd)/storage:/app/storage:ro" pdf-search
+```
+
+From the host machine, check that the API is ready:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+Search the indexed documents:
+
+```bash
+curl -X POST http://127.0.0.1:8000/search -H "Content-Type: application/json" -d '{"query":"Quel est le montant du don prévu dans la convention de mécénat financier ?","top_k":5}'
+```
+
+The storage volume persists the FAISS index, metadata and manifest. The model cache is not persisted by `docker run --rm` unless a cache volume is mounted.
+
+Run the complete Docker E2E test:
+
+```bash
+bash tests/e2e/docker_e2e.sh pdf-search
+```
+
+The image runs as a non-root `appuser`. The E2E test runs the complete flow in one container: it generates a deterministic PDF, builds the index and verifies `/health` and `/search`.
+
+## Local execution
 
 ### Requirements
 
@@ -51,7 +93,7 @@ storage/metadata.json
 storage/manifest.json
 ```
 
-The embedding model is downloaded from Hugging Face on its first use.
+When the API starts, the embedding model is downloaded if necessary and loaded into memory before the server accepts requests. This makes startup slower, but avoids delaying the first search request.
 
 ### Start the API
 
@@ -72,40 +114,16 @@ curl http://127.0.0.1:8000/health
 Search the indexed documents:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/search -H "Content-Type: application/json" -d '{"query":"Who signed the sponsorship agreement?","top_k":5}'
+curl -X POST http://127.0.0.1:8000/search -H "Content-Type: application/json" -d '{"query":"Quel est le montant du don prévu dans la convention de mécénat financier ?","top_k":5}'
 ```
+
+Other relevant queries for the provided documents:
+
+- `Quels sont les lots concernés par le marché public à Orsay ?`
+- `Quelles décisions ont été prises par le conseil municipal de Pluherlin le 20 mai 2026 ?`
+- `Quelles sont les dates autorisées pour occuper la rue de la Libération ?`
 
 Swagger documentation is available at `http://127.0.0.1:8000/docs`.
-
-## Docker execution
-
-Build the image:
-
-```bash
-docker build -t pdf-search .
-```
-
-Run the complete Docker E2E test:
-
-```bash
-bash tests/e2e/docker_e2e.sh pdf-search
-```
-
-The image runs as a non-root `appuser`. The E2E test runs the complete flow in one container: it generates a deterministic PDF, builds the index and verifies `/health` and `/search`.
-
-Run ingestion manually:
-
-```bash
-docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd)/data:/app/data:ro" -v "$(pwd)/storage:/app/storage" pdf-search python -m pdf_search.ingestion.cli data --storage-dir /app/storage
-```
-
-Start the API with the generated artifacts:
-
-```bash
-docker run --rm --user "$(id -u):$(id -g)" -p 8000:8000 -v "$(pwd)/storage:/app/storage:ro" pdf-search
-```
-
-The storage volume persists the FAISS index, metadata and manifest. The model cache is not persisted by `docker run --rm` unless a cache volume is mounted.
 
 ## Tests and CI
 
@@ -172,7 +190,7 @@ Request:
 
 ```json
 {
-  "query": "Who signed the sponsorship agreement?",
+  "query": "Quel est le montant du don prévu dans la convention de mécénat financier ?",
   "top_k": 5
 }
 ```
@@ -181,15 +199,15 @@ Response:
 
 ```json
 {
-  "query": "Who signed the sponsorship agreement?",
+  "query": "Quel est le montant du don prévu dans la convention de mécénat financier ?",
   "results": [
     {
-      "document_name": "document.pdf",
-      "page_number": 5,
+      "document_name": "159687_Projet+de+convention+de+mecenat+financier_BOYER+GESTION-2026+04+28+1.pdf",
+      "page_number": 2,
       "chunk_index": 0,
       "extraction_method": "text",
       "score": 0.43,
-      "text": "..."
+      "text": "Le MECENE contribue au projet artistique par un don financier de 3 500,00 €."
     }
   ]
 }
@@ -265,7 +283,7 @@ The code uses small classes with one responsibility:
 - `PageContent` and `TextChunk`: immutable value objects;
 - `PdfExtractor`: native text extraction and French OCR;
 - `TextChunker`: overlapping character-based chunks;
-- `EmbeddingModel`: lazy CPU model loading and vector generation;
+- `EmbeddingModel`: CPU model loading and vector generation;
 - `FaissVectorStore`: FAISS persistence, manifest validation and search;
 - `IngestionPipeline`: ingestion orchestration;
 - `SearchService`: application-level search orchestration.
@@ -285,6 +303,8 @@ Each chunk records whether it came from native text extraction or OCR. OCR can b
 The project uses `paraphrase-multilingual-MiniLM-L12-v2` on CPU. Embeddings are normalized, so the inner product used by `faiss.IndexFlatIP` is equivalent to cosine similarity.
 
 `IndexFlatIP` performs an exact search and is appropriate for the small corpus in this exercise.
+
+The API loads the embedding model during startup, while the ingestion command loads it when generating document embeddings.
 
 ### Manifest and persistence
 

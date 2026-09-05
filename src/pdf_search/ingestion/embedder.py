@@ -4,7 +4,7 @@ from pdf_search.config import EMBEDDING_BATCH_SIZE, MODEL_NAME
 
 
 class EmbeddingModel:
-    """Lazy CPU-backed wrapper around Sentence-Transformers."""
+    """CPU-backed wrapper around Sentence-Transformers."""
 
     def __init__(
         self,
@@ -27,6 +27,10 @@ class EmbeddingModel:
                 device=self.device,
             )
         return self._model
+
+    def load(self) -> None:
+        """Load the embedding model into memory."""
+        self._get_model()
 
     def encode(self, texts: list[str]):
         if not texts:
